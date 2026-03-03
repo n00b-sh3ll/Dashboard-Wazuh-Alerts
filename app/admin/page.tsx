@@ -29,6 +29,20 @@ interface SSHConnectionStatus {
   lastErrorMessage?: string
 }
 
+interface ElasticsearchConfig {
+  url: string
+  username: string
+  password: string
+}
+
+interface ElasticsearchConnectionStatus {
+  connected: boolean
+  lastConnectionTime?: string
+  lastErrorMessage?: string
+  clusterName?: string
+  clusterHealth?: string
+}
+
 export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([])
   const [name, setName] = useState('')
@@ -52,6 +66,17 @@ export default function AdminPage() {
   const [sshMessage, setSSHMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [sshConnectionStatus, setSSHConnectionStatus] = useState<SSHConnectionStatus>({ connected: false })
   const [isTestingConnection, setIsTestingConnection] = useState(false)
+  
+  // Elasticsearch Config states
+  const [elasticsearchConfig, setElasticsearchConfig] = useState<ElasticsearchConfig>({
+    url: '',
+    username: '',
+    password: ''
+  })
+  const [showElasticsearchPassword, setShowElasticsearchPassword] = useState(false)
+  const [elasticsearchMessage, setElasticsearchMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [elasticsearchConnectionStatus, setElasticsearchConnectionStatus] = useState<ElasticsearchConnectionStatus>({ connected: false })
+  const [isTestingElasticsearchConnection, setIsTestingElasticsearchConnection] = useState(false)
   
   const router = useRouter()
 
@@ -83,6 +108,18 @@ export default function AdminPage() {
     const storedConnectionStatus = readStorageJson<SSHConnectionStatus>('sshConnectionStatus', { connected: false })
     if (storedConnectionStatus) {
       setSSHConnectionStatus(storedConnectionStatus)
+    }
+    
+    // Carregar configuração Elasticsearch
+    const storedElasticsearchConfig = readStorageJson<ElasticsearchConfig>('elasticsearchConfig', null)
+    if (storedElasticsearchConfig) {
+      setElasticsearchConfig(storedElasticsearchConfig)
+    }
+    
+    // Carregar status de conexão Elasticsearch
+    const storedElasticsearchStatus = readStorageJson<ElasticsearchConnectionStatus>('elasticsearchConnectionStatus', { connected: false })
+    if (storedElasticsearchStatus) {
+      setElasticsearchConnectionStatus(storedElasticsearchStatus)
     }
   }, [router])
 
@@ -326,6 +363,105 @@ export default function AdminPage() {
       })
     } catch {
       return 'Inválido'
+    }
+  }
+
+  const saveElasticsearchConfig = (updatedConfig: ElasticsearchConfig) => {
+    writeStorageJson('elasticsearchConfig', updatedConfig)
+    setElasticsearchConfig(updatedConfig)
+  }
+
+  const handleElasticsearchConfigChange = (field: keyof ElasticsearchConfig, value: string) => {
+    setElasticsearchConfig(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleSaveElasticsearchConfig = () => {
+    if (!elasticsearchConfig.url.trim() || !elasticsearchConfig.username.trim() || !elasticsearchConfig.password.trim()) {
+      setElasticsearchMessage({ type: 'error', text: 'URL, Usuário e Senha são obrigatórios' })
+      setTimeout(() => setElasticsearchMessage(null), 3000)
+      return
+    }
+
+    // Validar URL
+    try {
+      new URL(elasticsearchConfig.url)
+    } catch {
+      setElasticsearchMessage({ type: 'error', text: 'URL do Elasticsearch inválida' })
+      setTimeout(() => setElasticsearchMessage(null), 3000)
+      return
+    }
+
+    saveElasticsearchConfig(elasticsearchConfig)
+    setElasticsearchMessage({ type: 'success', text: 'Configuração Elasticsearch salva com sucesso' })
+    setTimeout(() => setElasticsearchMessage(null), 3000)
+  }
+
+  const handleTestElasticsearchConnection = async () => {
+    if (!elasticsearchConfig.url.trim() || !elasticsearchConfig.username.trim() || !elasticsearchConfig.password.trim()) {
+      setElasticsearchMessage({ type: 'error', text: 'URL, Usuário e Senha são obrigatórios' })
+      setTimeout(() => setElasticsearchMessage(null), 3000)
+      return
+    }
+
+    setIsTestingElasticsearchConnection(true)
+    try {
+      const response = await fetch('/api/test-elasticsearch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(elasticsearchConfig)
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        const connectionStatus: ElasticsearchConnectionStatus = {
+          connected: true,
+          lastConnectionTime: new Date().toISOString(),
+          clusterName: data.clusterName,
+          clusterHealth: data.clusterHealth
+        }
+        writeStorageJson('elasticsearchConnectionStatus', connectionStatus)
+        setElasticsearchConnectionStatus(connectionStatus)
+        setElasticsearchMessage({ type: 'success', text: '✅ Conexão Elasticsearch estabelecida com sucesso!' })
+      } else {
+        const connectionStatus: ElasticsearchConnectionStatus = {
+          connected: false,
+          lastErrorMessage: data.error || 'Falha ao conectar'
+        }
+        writeStorageJson('elasticsearchConnectionStatus', connectionStatus)
+        setElasticsearchConnectionStatus(connectionStatus)
+        setElasticsearchMessage({ type: 'error', text: `❌ Erro na conexão: ${data.error || 'Falha desconhecida'}` })
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+      const connectionStatus: ElasticsearchConnectionStatus = {
+        connected: false,
+        lastErrorMessage: errorMessage
+      }
+      writeStorageJson('elasticsearchConnectionStatus', connectionStatus)
+      setElasticsearchConnectionStatus(connectionStatus)
+      setElasticsearchMessage({ type: 'error', text: `❌ Erro ao testar conexão: ${errorMessage}` })
+    } finally {
+      setIsTestingElasticsearchConnection(false)
+      setTimeout(() => setElasticsearchMessage(null), 5000)
+    }
+  }
+
+  const handleClearElasticsearchConfig = () => {
+    if (confirm('Tem certeza que deseja limpar as configurações Elasticsearch?')) {
+      setElasticsearchConfig({
+        url: '',
+        username: '',
+        password: ''
+      })
+      writeStorageJson('elasticsearchConfig', null)
+      setElasticsearchConnectionStatus({ connected: false })
+      writeStorageJson('elasticsearchConnectionStatus', { connected: false })
+      setElasticsearchMessage({ type: 'success', text: 'Configurações Elasticsearch removidas' })
+      setTimeout(() => setElasticsearchMessage(null), 3000)
     }
   }
 
@@ -753,6 +889,162 @@ export default function AdminPage() {
                   
                   <button
                     onClick={handleClearSSHConfig}
+                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    🗑️ Limpar Configuração
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Configurações Elasticsearch */}
+        <div className="mt-8 bg-slate-900 border border-slate-700 rounded-lg p-6">
+          <div className="mb-6">
+            <h3 className="text-xl font-semibold text-slate-100 mb-2">🔍 Configurações Elasticsearch</h3>
+            <p className="text-slate-400 text-sm">Configure a conexão com o servidor Elasticsearch para acesso aos alertas</p>
+          </div>
+
+          {/* Mensagem de feedback Elasticsearch */}
+          {elasticsearchMessage && (
+            <div className={`mb-6 px-4 py-3 rounded-lg border ${
+              elasticsearchMessage.type === 'success' 
+                ? 'bg-green-900/30 border-green-500 text-green-200' 
+                : 'bg-red-900/30 border-red-500 text-red-200'
+            }`}>
+              {elasticsearchMessage.text}
+            </div>
+          )}
+
+          <div className="space-y-6">
+            {/* Campos de configuração */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                URL do Elasticsearch
+              </label>
+              <input
+                type="text"
+                value={elasticsearchConfig.url}
+                onChange={(e) => handleElasticsearchConfigChange('url', e.target.value)}
+                placeholder="Ex: https://192.168.150.210:9200"
+                className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Usuário
+                </label>
+                <input
+                  type="text"
+                  value={elasticsearchConfig.username}
+                  onChange={(e) => handleElasticsearchConfigChange('username', e.target.value)}
+                  placeholder="Ex: admin"
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Senha
+                </label>
+                <div className="relative">
+                  <input
+                    type={showElasticsearchPassword ? "text" : "password"}
+                    value={elasticsearchConfig.password}
+                    onChange={(e) => handleElasticsearchConfigChange('password', e.target.value)}
+                    placeholder="Digite a senha"
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowElasticsearchPassword(!showElasticsearchPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  >
+                    {showElasticsearchPassword ? '👁️' : '👁️‍🗨️'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Status da configuração e conexão */}
+            {elasticsearchConfig.url && elasticsearchConfig.username && elasticsearchConfig.password && (
+              <div className="space-y-4">
+                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                  <div className="text-sm text-slate-300">
+                    <div className="mb-2">
+                      <span className="font-semibold text-slate-200">Status da Configuração: </span>
+                      <span className="text-green-300">✅ Configurada</span>
+                    </div>
+                    <div className="space-y-1 text-xs text-slate-400">
+                      <div><span className="text-slate-300">URL:</span> {elasticsearchConfig.url}</div>
+                      <div><span className="text-slate-300">Usuário:</span> {elasticsearchConfig.username}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status de Conexão */}
+                <div className={`border rounded-lg p-4 ${
+                  elasticsearchConnectionStatus.connected
+                    ? 'bg-green-900/20 border-green-500/30'
+                    : 'bg-yellow-900/20 border-yellow-500/30'
+                }`}>
+                  <div className="text-sm">
+                    <div className="mb-2">
+                      <span className="font-semibold text-slate-200">Status da Conexão: </span>
+                      {elasticsearchConnectionStatus.connected ? (
+                        <span className="text-green-300 font-semibold">🟢 Conectado</span>
+                      ) : (
+                        <span className="text-yellow-300 font-semibold">🟡 Não Testado</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      <div><span className="text-slate-300">Última Conexão:</span> {formatConnectionTime(elasticsearchConnectionStatus.lastConnectionTime)}</div>
+                      {elasticsearchConnectionStatus.clusterName && (
+                        <>
+                          <div><span className="text-slate-300">Cluster:</span> {elasticsearchConnectionStatus.clusterName}</div>
+                          <div><span className="text-slate-300">Saúde:</span> <span className={elasticsearchConnectionStatus.clusterHealth === 'green' ? 'text-green-300' : elasticsearchConnectionStatus.clusterHealth === 'yellow' ? 'text-yellow-300' : 'text-red-300'}>{elasticsearchConnectionStatus.clusterHealth?.toUpperCase()}</span></div>
+                        </>
+                      )}
+                      {elasticsearchConnectionStatus.lastErrorMessage && (
+                        <div className="mt-1 text-red-300"><span className="text-slate-300">Último Erro:</span> {elasticsearchConnectionStatus.lastErrorMessage}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Botões de ação */}
+            <div className="flex gap-3 flex-wrap">
+              <button
+                onClick={handleSaveElasticsearchConfig}
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+              >
+                💾 Salvar Configuração
+              </button>
+              
+              {elasticsearchConfig.url && elasticsearchConfig.username && elasticsearchConfig.password && (
+                <>
+                  <button
+                    onClick={handleTestElasticsearchConnection}
+                    disabled={isTestingElasticsearchConnection}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                  >
+                    {isTestingElasticsearchConnection ? (
+                      <>
+                        <span className="inline-block animate-spin">⏳</span>
+                        Testando...
+                      </>
+                    ) : (
+                      '🔗 Testar Conexão'
+                    )}
+                  </button>
+                  
+                  <button
+                    onClick={handleClearElasticsearchConfig}
                     className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
                   >
                     🗑️ Limpar Configuração
