@@ -1,0 +1,6 @@
+# Ignore all log files
+*.log
+
+# Keep this directory in git
+!.gitkeep
+!README.md

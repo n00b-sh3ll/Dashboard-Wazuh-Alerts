@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { logError, logAPIError } from '@/lib/logger'
 
 interface SSHConfig {
   ip: string
@@ -109,6 +110,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
     console.error('❌ SSH Connection Test Error:', errorMessage)
+    
+    logAPIError('/api/test-ssh', 'POST', 500, errorMessage)
 
     return NextResponse.json(
       { success: false, error: `Erro ao testar conexão: ${errorMessage}` },
