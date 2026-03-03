@@ -688,35 +688,6 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* Estatísticas */}
-        <div className="mt-8 grid grid-cols-4 gap-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
-            <div className="text-sm font-semibold text-blue-300">Total de Usuários</div>
-            <div className="text-3xl font-bold text-blue-100 mt-2">{users.length}</div>
-          </div>
-          
-          <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
-            <div className="text-sm font-semibold text-purple-300">Administradores</div>
-            <div className="text-3xl font-bold text-purple-100 mt-2">
-              {users.filter(u => u.role === 'admin').length}
-            </div>
-          </div>
-          
-          <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
-            <div className="text-sm font-semibold text-orange-300">Operadores</div>
-            <div className="text-3xl font-bold text-orange-100 mt-2">
-              {users.filter(u => u.role === 'operador').length}
-            </div>
-          </div>
-          
-          <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
-            <div className="text-sm font-semibold text-green-300">Usuários Comuns</div>
-            <div className="text-3xl font-bold text-green-100 mt-2">
-              {users.filter(u => u.role === 'user').length}
-            </div>
-          </div>
-        </div>
-
         {/* Configurações SSH */}
         <div className="mt-8 bg-slate-900 border border-slate-700 rounded-lg p-6">
           <div className="mb-6">
