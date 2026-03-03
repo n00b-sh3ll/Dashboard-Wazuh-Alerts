@@ -8,7 +8,8 @@
     "start": "next start",
     "db:query": "node scripts/db-query.js",
     "db:tables": "node scripts/db-query.js --tables",
-    "db:schema": "node scripts/db-query.js --schema"
+    "db:schema": "node scripts/db-query.js --schema",
+    "test:elasticsearch": "node scripts/test-elasticsearch.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",

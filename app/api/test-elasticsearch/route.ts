@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import https from 'https'
 
 interface ElasticsearchConfig {
   url: string
@@ -18,6 +19,13 @@ interface ClusterHealthResponse {
   status: string
   cluster_name: string
 }
+
+// Create HTTPS agent that ignores self-signed certificates
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false,
+  keepAlive: true,
+  timeout: 10000
+})
 
 /**
  * Test Elasticsearch connection
@@ -49,19 +57,44 @@ export async function POST(request: NextRequest) {
       // Prepare authentication header
       const credentials = Buffer.from(`${config.username}:${config.password}`).toString('base64')
       
-      // Test basic connection
+      console.log('🔗 Testando conexão com Elasticsearch:', {
+        url: config.url,
+        username: config.username,
+        timestamp: new Date().toISOString()
+      })
+
+      // Test basic connection with agent for self-signed certificates
       const response = await fetch(`${config.url}/`, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/json'
-        }
+        },
+        // @ts-ignore - Using https agent for Node.js
+        agent: httpsAgent,
+        timeout: 10000
       })
 
       if (!response.ok) {
         const errorData = await response.text()
+        let errorMessage = `Erro ${response.status}`
+        
+        if (response.status === 401) {
+          errorMessage = 'Erro de autenticação: Verifique usuário e senha'
+        } else if (response.status === 403) {
+          errorMessage = 'Acesso negado: Usuário sem permissões'
+        } else if (response.status === 404) {
+          errorMessage = 'Servidor não encontrado: Verifique a URL'
+        }
+        
+        console.error('❌ Elasticsearch Auth Error:', {
+          status: response.status,
+          url: config.url,
+          timestamp: new Date().toISOString()
+        })
+        
         return NextResponse.json(
-          { success: false, error: `Erro de autenticação ou conexão: ${response.status}` },
+          { success: false, error: errorMessage },
           { status: 400 }
         )
       }
@@ -76,7 +109,10 @@ export async function POST(request: NextRequest) {
           headers: {
             'Authorization': `Basic ${credentials}`,
             'Content-Type': 'application/json'
-          }
+          },
+          // @ts-ignore - Using https agent for Node.js
+          agent: httpsAgent,
+          timeout: 10000
         })
 
         if (healthResponse.ok) {
@@ -108,21 +144,49 @@ export async function POST(request: NextRequest) {
         }
       })
     } catch (connectionError) {
-      const errorMessage = connectionError instanceof Error 
-        ? connectionError.message 
-        : 'Erro ao conectar'
+      let errorMessage = 'Erro ao conectar'
+      
+      if (connectionError instanceof TypeError) {
+        // Network errors
+        if (connectionError.message.includes('fetch failed')) {
+          errorMessage = 'Erro de conexão: Verifique se a URL está correta e o servidor está acessível'
+        } else if (connectionError.message.includes('socket hang up')) {
+          errorMessage = 'Servidor desconectou inesperadamente'
+        } else if (connectionError.message.includes('timeout')) {
+          errorMessage = 'Tempo esgotado: Servidor não respondeu no tempo esperado'
+        } else {
+          errorMessage = connectionError.message
+        }
+      } else if (connectionError instanceof Error) {
+        errorMessage = connectionError.message
+      }
+      
+      console.error('❌ Elasticsearch Connection Error:', {
+        error: errorMessage,
+        url: config.url,
+        timestamp: new Date().toISOString()
+      })
       
       return NextResponse.json(
-        { success: false, error: `Falha na conexão: ${errorMessage}` },
+        { success: false, error: errorMessage },
         { status: 400 }
       )
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
-    console.error('❌ Elasticsearch Connection Test Error:', errorMessage)
+    let errorMessage = 'Erro desconhecido'
+    
+    if (error instanceof Error) {
+      errorMessage = error.message
+    }
+    
+    console.error('❌ Elasticsearch Connection Test Error:', {
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    })
 
     return NextResponse.json(
-      { success: false, error: `Erro ao testar conexão: ${errorMessage}` },
+      { success: false, error: errorMessage },
       { status: 500 }
     )
   }
