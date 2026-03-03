@@ -6,6 +6,7 @@ import {
   recordConnectionFailure,
   getCacheInfo,
 } from '@/lib/offline-cache'
+import { logError, logSSHConnection } from '@/lib/logger'
 
 export const runtime = 'nodejs'
 
@@ -35,11 +36,26 @@ export async function POST(request: Request) {
       } else {
         // Salvar alertas bem-sucedidos em cache
         saveAlertsToCache(alertsData)
+        
+        // Log successful SSH connection
+        const sshHost = process.env.SSH_HOST || '192.168.150.210'
+        const sshUser = process.env.SSH_USER || 'usuario'
+        logSSHConnection(true, sshHost, sshUser)
       }
     } catch (sshErr: any) {
       // SSH falhou - tentar usar cache
       connectionError = sshErr?.message
       console.warn('[API /sync-alerts] SSH connection failed, attempting fallback to cache...')
+      
+      // Log SSH connection failure
+      const sshHost = process.env.SSH_HOST || '192.168.150.210'
+      const sshUser = process.env.SSH_USER || 'usuario'
+      logSSHConnection(false, sshHost, sshUser, connectionError || 'Unknown SSH error')
+      logError('SSH_FETCH_FAILED', `Failed to fetch alerts via SSH: ${connectionError}`, 503, {
+        host: sshHost,
+        user: sshUser
+      })
+      
       recordConnectionFailure()
 
       const cachedData = getAlertsFromCache()
@@ -151,7 +167,16 @@ PYTHONEOF
     })
     return JSON.parse(result)
   } catch (err: any) {
-    console.error('[SSH] SSH command failed:', err.message)
-    throw new Error(`SSH fetch failed: ${err.message}`)
+    const errorMsg = err.message || 'Unknown SSH command error'
+    console.error('[SSH] SSH command failed:', errorMsg)
+    
+    // Log the SSH command failure
+    logError('SSH_COMMAND_FAILED', errorMsg, 500, {
+      host: sshHost,
+      user: sshUser,
+      stderr: err.stderr?.toString() || 'No stderr output'
+    })
+    
+    throw new Error(`SSH fetch failed: ${errorMsg}`)
   }
 }

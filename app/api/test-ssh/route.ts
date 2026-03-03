@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { logError, logAPIError } from '@/lib/logger'
+import { logError, logAPIError, logSSHConnection } from '@/lib/logger'
 
 interface SSHConfig {
   ip: string
@@ -15,27 +15,46 @@ interface SSHConfig {
  * For now, we simulate a connection test by validating the configuration
  */
 export async function POST(request: NextRequest) {
+  let config: SSHConfig | null = null
+  
   try {
-    const config: SSHConfig = await request.json()
+    config = await request.json()
 
     // Validate configuration
     if (!config.ip || !config.username) {
+      const errorMsg = 'IP e usuário são obrigatórios'
+      logError('SSH_VALIDATION_ERROR', errorMsg, 400, {
+        ip: config.ip || 'missing',
+        username: config.username || 'missing'
+      })
       return NextResponse.json(
-        { success: false, error: 'IP e usuário são obrigatórios' },
+        { success: false, error: errorMsg },
         { status: 400 }
       )
     }
 
     if (config.authType === 'password' && !config.password) {
+      const errorMsg = 'Senha é obrigatória'
+      logError('SSH_VALIDATION_ERROR', errorMsg, 400, {
+        ip: config.ip,
+        username: config.username,
+        authType: config.authType
+      })
       return NextResponse.json(
-        { success: false, error: 'Senha é obrigatória' },
+        { success: false, error: errorMsg },
         { status: 400 }
       )
     }
 
     if (config.authType === 'key' && !config.sshKey) {
+      const errorMsg = 'Chave SSH é obrigatória'
+      logError('SSH_VALIDATION_ERROR', errorMsg, 400, {
+        ip: config.ip,
+        username: config.username,
+        authType: config.authType
+      })
       return NextResponse.json(
-        { success: false, error: 'Chave SSH é obrigatória' },
+        { success: false, error: errorMsg },
         { status: 400 }
       )
     }
@@ -43,8 +62,13 @@ export async function POST(request: NextRequest) {
     // Validate IP format
     const ipRegex = /^(\d{1,3}\.){3}\d{1,3}(:[\d]+)?$/
     if (!ipRegex.test(config.ip)) {
+      const errorMsg = 'Formato de IP inválido'
+      logError('SSH_VALIDATION_ERROR', errorMsg, 400, {
+        ip: config.ip,
+        username: config.username
+      })
       return NextResponse.json(
-        { success: false, error: 'Formato de IP inválido' },
+        { success: false, error: errorMsg },
         { status: 400 }
       )
     }
@@ -73,8 +97,10 @@ export async function POST(request: NextRequest) {
      * return new Promise((resolve) => {
      *   conn.on('ready', () => {
      *     conn.end();
+     *     logSSHConnection(true, config.ip, config.username);
      *     resolve(NextResponse.json({ success: true, message: 'Conectado com sucesso' }));
      *   }).on('error', (err: Error) => {
+     *     logSSHConnection(false, config.ip, config.username, err.message);
      *     resolve(NextResponse.json(
      *       { success: false, error: err.message },
      *       { status: 400 }
@@ -96,6 +122,9 @@ export async function POST(request: NextRequest) {
     // Simulate some processing time
     await new Promise(resolve => setTimeout(resolve, 1000))
 
+    // Log successful connection
+    logSSHConnection(true, config.ip, config.username)
+
     // Return success (in production, this would be based on actual connection result)
     return NextResponse.json({
       success: true,
@@ -111,7 +140,13 @@ export async function POST(request: NextRequest) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
     console.error('❌ SSH Connection Test Error:', errorMessage)
     
+    // Log API error
     logAPIError('/api/test-ssh', 'POST', 500, errorMessage)
+    
+    // Log SSH connection failure if we have config data
+    if (config) {
+      logSSHConnection(false, config.ip || 'unknown', config.username || 'unknown', errorMessage)
+    }
 
     return NextResponse.json(
       { success: false, error: `Erro ao testar conexão: ${errorMessage}` },
