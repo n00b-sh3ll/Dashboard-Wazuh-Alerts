@@ -5,6 +5,8 @@ import Header from '@/components/Header'
 import AlertList from '@/components/AlertList'
 import AlertModal from '@/components/AlertModal'
 import AlertRegistry from '@/components/AlertRegistry'
+import MergeAlertsPanel from '@/components/MergeAlertsPanel'
+import ProtectedRoute from '@/components/ProtectedRoute'
 import { readStorageJson } from '@/lib/storage'
 
 export default function DashboardPage() {
@@ -22,6 +24,8 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [showStats, setShowStats] = useState(false)
+  const [stats, setStats] = useState({ total: 0, closed: 0, inProgress: 0, scheduled: 0, falsePositive: 0, canceled: 0, inHomologation: 0, newAlerts: 0 })
 
   const parseLocalDate = (value: string) => {
     const [year, month, day] = value.split('-').map(Number)
@@ -33,7 +37,6 @@ export default function DashboardPage() {
     const [year, month, day] = value.split('-')
     return `${day}/${month}/${year}`
   }
-  const [stats, setStats] = useState({ total: 0, closed: 0, inProgress: 0, scheduled: 0, falsePositive: 0, canceled: 0, inHomologation: 0, newAlerts: 0 })
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
@@ -138,6 +141,7 @@ export default function DashboardPage() {
     setStats({ total: totalAlerts, closed, inProgress, scheduled, falsePositive, canceled, inHomologation, newAlerts })
   }, [totalAlerts])
 
+  
   const handleSyncAlerts = async () => {
     setSyncing(true)
     setSyncMessage(null)
@@ -168,119 +172,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <div>
-      <Header />
-      <main className="container py-8">
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-4 gap-4 mb-4">
-          <div 
-            onClick={() => setStatusFilter(statusFilter === 'all' ? '' : 'all')}
-            className={`rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg ${
-              statusFilter === 'all' 
-                ? 'bg-blue-900/40 border-2 border-blue-500 shadow-md' 
-                : 'bg-slate-900 border border-slate-700'
-            }`}
-          >
-            <div className="text-sm font-semibold text-blue-300">Total de Alertas</div>
-            <div className="text-3xl font-bold text-blue-100 mt-2">{stats.total}</div>
-            <div className="text-xs text-blue-400 mt-1">no sistema</div>
-          </div>
-
-          <div 
-            onClick={() => setStatusFilter(statusFilter === 'novo alerta' ? '' : 'novo alerta')}
-            className={`rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg ${
-              statusFilter === 'novo alerta' 
-                ? 'bg-red-900/40 border-2 border-red-500 shadow-md' 
-                : 'bg-slate-900 border border-slate-700'
-            }`}
-          >
-            <div className="text-sm font-semibold text-red-300">Novos</div>
-            <div className="text-3xl font-bold text-red-100 mt-2">{stats.newAlerts}</div>
-            <div className="text-xs text-red-400 mt-1">não atendidos</div>
-          </div>
-
-          <div 
-            onClick={() => setStatusFilter(statusFilter === 'em atendimento' ? '' : 'em atendimento')}
-            className={`rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg ${
-              statusFilter === 'em atendimento' 
-                ? 'bg-yellow-900/40 border-2 border-yellow-500 shadow-md' 
-                : 'bg-slate-900 border border-slate-700'
-            }`}
-          >
-            <div className="text-sm font-semibold text-yellow-300">Em Atendimento</div>
-            <div className="text-3xl font-bold text-yellow-100 mt-2">{stats.inProgress}</div>
-            <div className="text-xs text-yellow-400 mt-1">em processamento</div>
-          </div>
-
-          <div 
-            onClick={() => setStatusFilter(statusFilter === 'fechado' ? '' : 'fechado')}
-            className={`rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg ${
-              statusFilter === 'fechado' 
-                ? 'bg-green-900/40 border-2 border-green-500 shadow-md' 
-                : 'bg-slate-900 border border-slate-700'
-            }`}
-          >
-            <div className="text-sm font-semibold text-green-300">Fechados</div>
-            <div className="text-3xl font-bold text-green-100 mt-2">{stats.closed}</div>
-            <div className="text-xs text-green-400 mt-1">resolvidos</div>
-          </div>
-        </div>
-
-        {/* Segunda linha de status */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
-          <div 
-            onClick={() => setStatusFilter(statusFilter === 'agendado' ? '' : 'agendado')}
-            className={`rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg ${
-              statusFilter === 'agendado' 
-                ? 'bg-blue-900/40 border-2 border-blue-500 shadow-md' 
-                : 'bg-slate-900 border border-slate-700'
-            }`}
-          >
-            <div className="text-sm font-semibold text-blue-300">Agendados</div>
-            <div className="text-3xl font-bold text-blue-100 mt-2">{stats.scheduled}</div>
-            <div className="text-xs text-blue-400 mt-1">para análise futura</div>
-          </div>
-
-          <div 
-            onClick={() => setStatusFilter(statusFilter === 'falso-positivo' ? '' : 'falso-positivo')}
-            className={`rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg ${
-              statusFilter === 'falso-positivo' 
-                ? 'bg-orange-900/40 border-2 border-orange-500 shadow-md' 
-                : 'bg-slate-900 border border-slate-700'
-            }`}
-          >
-            <div className="text-sm font-semibold text-orange-300">Falso-Positivo</div>
-            <div className="text-3xl font-bold text-orange-100 mt-2">{stats.falsePositive}</div>
-            <div className="text-xs text-orange-400 mt-1">sem ação necessária</div>
-          </div>
-
-          <div 
-            onClick={() => setStatusFilter(statusFilter === 'cancelado' ? '' : 'cancelado')}
-            className={`rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg ${
-              statusFilter === 'cancelado' 
-                ? 'bg-gray-900/40 border-2 border-gray-500 shadow-md' 
-                : 'bg-slate-900 border border-slate-700'
-            }`}
-          >
-            <div className="text-sm font-semibold text-gray-300">Cancelados</div>
-            <div className="text-3xl font-bold text-gray-100 mt-2">{stats.canceled}</div>
-            <div className="text-xs text-gray-400 mt-1">descartados</div>
-          </div>
-
-          <div 
-            onClick={() => setStatusFilter(statusFilter === 'em homologação' ? '' : 'em homologação')}
-            className={`rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg ${
-              statusFilter === 'em homologação' 
-                ? 'bg-purple-900/40 border-2 border-purple-500 shadow-md' 
-                : 'bg-slate-900 border border-slate-700'
-            }`}
-          >
-            <div className="text-sm font-semibold text-purple-300">Em Homologação</div>
-            <div className="text-3xl font-bold text-purple-100 mt-2">{stats.inHomologation}</div>
-            <div className="text-xs text-purple-400 mt-1">em teste</div>
-          </div>
-        </div>
-
+    <ProtectedRoute>
+      <div>
+        <Header />
+        <main className="container py-8">
         {/* Sincronização de Alertas */}
         <div className="mb-6 bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-700 rounded-lg p-4">
           <div className="flex items-center justify-between">
@@ -350,6 +245,13 @@ export default function DashboardPage() {
                 />
               </svg>
             </button>
+            <button
+              onClick={() => setShowStats(!showStats)}
+              className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 transition-all text-sm text-slate-300"
+              title={showStats ? "Ocultar estatísticas" : "Mostrar estatísticas"}
+            >
+              {showStats ? '📊 Ocultar Stats' : '📊 Mostrar Stats'}
+            </button>
           </div>
           <div className="flex items-center gap-3">
             {statusFilter && (
@@ -377,12 +279,88 @@ export default function DashboardPage() {
               </div>
             )}
             <AlertRegistry />
+            <MergeAlertsPanel alerts={alerts} onMergeComplete={() => fetchPage(page)} />
           </div>
         </div>
 
+        {/* Statistics Cards - Enumeração dos Alertas */}
+        {showStats && (
+          <>
+            <div className="grid grid-cols-4 gap-4 mb-4">
+              <div className="rounded-lg p-4 transition-all hover:shadow-lg bg-slate-900 border border-slate-700">
+                <div className="text-sm font-semibold text-blue-300">Total de Alertas</div>
+                <div className="text-3xl font-bold text-blue-100 mt-2">{stats.total}</div>
+                <div className="text-xs text-blue-400 mt-1">no sistema</div>
+              </div>
+
+              <div className="rounded-lg p-4 transition-all hover:shadow-lg bg-slate-900 border border-slate-700">
+                <div className="text-sm font-semibold text-red-300">Novos</div>
+                <div className="text-3xl font-bold text-red-100 mt-2">{stats.newAlerts}</div>
+                <div className="text-xs text-red-400 mt-1">não atendidos</div>
+              </div>
+
+              <div className="rounded-lg p-4 transition-all hover:shadow-lg bg-slate-900 border border-slate-700">
+                <div className="text-sm font-semibold text-yellow-300">Em Atendimento</div>
+                <div className="text-3xl font-bold text-yellow-100 mt-2">{stats.inProgress}</div>
+                <div className="text-xs text-yellow-400 mt-1">em processamento</div>
+              </div>
+
+              <div className="rounded-lg p-4 transition-all hover:shadow-lg bg-slate-900 border border-slate-700">
+                <div className="text-sm font-semibold text-green-300">Fechados</div>
+                <div className="text-3xl font-bold text-green-100 mt-2">{stats.closed}</div>
+                <div className="text-xs text-green-400 mt-1">resolvidos</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4 mb-4">
+              <div className="rounded-lg p-4 transition-all hover:shadow-lg bg-slate-900 border border-slate-700">
+                <div className="text-sm font-semibold text-blue-300">Agendados</div>
+                <div className="text-3xl font-bold text-blue-100 mt-2">{stats.scheduled}</div>
+                <div className="text-xs text-blue-400 mt-1">para análise futura</div>
+              </div>
+
+              <div className="rounded-lg p-4 transition-all hover:shadow-lg bg-slate-900 border border-slate-700">
+                <div className="text-sm font-semibold text-orange-300">Falso-Positivo</div>
+                <div className="text-3xl font-bold text-orange-100 mt-2">{stats.falsePositive}</div>
+                <div className="text-xs text-orange-400 mt-1">sem ação necessária</div>
+              </div>
+
+              <div className="rounded-lg p-4 transition-all hover:shadow-lg bg-slate-900 border border-slate-700">
+                <div className="text-sm font-semibold text-gray-300">Cancelados</div>
+                <div className="text-3xl font-bold text-gray-100 mt-2">{stats.canceled}</div>
+                <div className="text-xs text-gray-400 mt-1">descartados</div>
+              </div>
+
+              <div className="rounded-lg p-4 transition-all hover:shadow-lg bg-slate-900 border border-slate-700">
+                <div className="text-sm font-semibold text-purple-300">Em Homologação</div>
+                <div className="text-3xl font-bold text-purple-100 mt-2">{stats.inHomologation}</div>
+                <div className="text-xs text-purple-400 mt-1">em teste</div>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Painel de Filtros */}
         <div className="mb-6 bg-slate-900 border border-slate-700 rounded-lg p-4">
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-5 gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-slate-300 font-medium min-w-[60px]">Status:</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="border border-slate-700 bg-slate-900 text-slate-100 rounded px-2 py-1 text-sm flex-1"
+              >
+                <option value="">Todos</option>
+                <option value="novo alerta">Novos</option>
+                <option value="em atendimento">Em Atendimento</option>
+                <option value="agendado">Agendados</option>
+                <option value="fechado">Fechados</option>
+                <option value="falso-positivo">Falso-Positivo</option>
+                <option value="cancelado">Cancelados</option>
+                <option value="em homologação">Em Homologação</option>
+              </select>
+            </div>
+            
             <div className="flex items-center gap-2">
               <label className="text-sm text-slate-300 font-medium min-w-[60px]">Ordenar:</label>
               <select
@@ -421,23 +399,22 @@ export default function DashboardPage() {
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-300 font-medium min-w-[60px]">De:</label>
+            <div className="flex items-center gap-2 col-span-2">
+              <label className="text-sm text-slate-300 font-medium min-w-[70px]">Período:</label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="border border-slate-700 bg-slate-900 text-slate-100 rounded px-2 py-1 text-sm flex-1"
+                title="Data inicial"
               />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-300 font-medium min-w-[60px]">Até:</label>
+              <span className="text-slate-500">até</span>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="border border-slate-700 bg-slate-900 text-slate-100 rounded px-2 py-1 text-sm flex-1"
+                title="Data final"
               />
             </div>
 
@@ -452,7 +429,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-300 font-medium min-w-[60px]">Por página:</label>
+              <label className="text-sm text-slate-300 font-medium min-w-[70px]">Por página:</label>
               <select 
                 value={pageSize} 
                 onChange={(e) => setPageSize(Number(e.target.value))} 
@@ -485,5 +462,6 @@ export default function DashboardPage() {
         />
       </main>
     </div>
+    </ProtectedRoute>
   )
 }

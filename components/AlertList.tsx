@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import Pagination from './Pagination'
 import { readStorageJson } from '@/lib/storage'
+import { getAlertsMergedInfo } from '@/lib/alert-merge'
 
 type Props = {
   alerts: any[]
@@ -27,8 +28,14 @@ export default function AlertList({ alerts, loading, error, page, pageSize, onPa
   const alertRegistry = readStorageJson<Record<string, number>>('alertRegistry', {})
   const storedAnnotations = readStorageJson<Record<string, any>>('alertAnnotations', {})
 
+  // Filtrar alertas que foram mesclados em outros (para não mostrar duplicatas)
+  const visibleAlerts = alerts.filter(a => {
+    const mergedInfo = getAlertsMergedInfo(a._id)
+    return !mergedInfo?.mergedInto // Ocultar alertas que foram mesclados em outro
+  })
+
   // Filtrar alertas por status se houver filtro ativo
-  const filteredAlerts = statusFilter ? alerts.filter(a => {
+  const filteredAlerts = statusFilter ? visibleAlerts.filter(a => {
     if (statusFilter === 'all') return true
     if (statusFilter === 'novo alerta') {
       const alertData = storedAnnotations[a._id]
@@ -36,7 +43,7 @@ export default function AlertList({ alerts, loading, error, page, pageSize, onPa
     }
     const alertData = storedAnnotations[a._id]
     return alertData?.status === statusFilter
-  }) : alerts
+  }) : visibleAlerts
 
   // Ordenar alertas conforme opção selecionada
   const sortedAlerts = [...filteredAlerts].sort((a, b) => {
@@ -250,7 +257,21 @@ export default function AlertList({ alerts, loading, error, page, pageSize, onPa
                   {alertId || '—'}
                 </td>
                 <td className="p-3 text-sm whitespace-nowrap text-slate-200 cursor-pointer" onClick={() => onAlertClick?.(a)}>{new Date(timestamp).toLocaleString()}</td>
-                <td className="p-3 text-sm text-slate-200 cursor-pointer" onClick={() => onAlertClick?.(a)}>{description}</td>
+                <td className="p-3 text-sm text-slate-200 cursor-pointer" onClick={() => onAlertClick?.(a)}>
+                  <div className="flex items-center gap-2">
+                    <span>{description}</span>
+                    {getAlertsMergedInfo(a._id)?.mergedAlerts && (
+                      <span className="inline-block px-2 py-1 bg-green-900/40 text-green-300 text-xs rounded-full font-semibold" title="Este alerta tem outros alertas mesclados nele">
+                        🔗 Merged
+                      </span>
+                    )}
+                    {getAlertsMergedInfo(a._id)?.mergedInto && (
+                      <span className="inline-block px-2 py-1 bg-purple-900/40 text-purple-300 text-xs rounded-full font-semibold" title="Este alerta foi mesclado em outro">
+                        ↪️ Merged Into
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="p-3 text-sm text-center text-slate-200 cursor-pointer" onClick={() => onAlertClick?.(a)}>{level}</td>
                 <td className="p-3 text-sm cursor-pointer" onClick={() => onAlertClick?.(a)}>
                   <span className={`px-3 py-2 rounded text-xs font-semibold inline-block ${getStatusColor(displayStatus)}`}>
@@ -264,7 +285,7 @@ export default function AlertList({ alerts, loading, error, page, pageSize, onPa
       </table>
 
       <div className="p-4 bg-slate-800 border-t border-slate-700">
-        <Pagination page={page} pageSize={pageSize} itemsCount={alerts.length} onPageChange={onPageChange} />
+        <Pagination page={page} pageSize={pageSize} itemsCount={sortedAlerts.length} onPageChange={onPageChange} />
       </div>
     </div>
   )

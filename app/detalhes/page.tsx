@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
+import ProtectedRoute from '@/components/ProtectedRoute'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 
 export default function DetalhesPage() {
@@ -14,6 +15,10 @@ export default function DetalhesPage() {
   const [availableAgents, setAvailableAgents] = useState<string[]>([])
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [query, setQuery] = useState('')
+  const [allAlerts, setAllAlerts] = useState<any[]>([])
+  const [selectedDescription, setSelectedDescription] = useState<string | null>(null)
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
 
   const parseLocalDate = (value: string) => {
     const [year, month, day] = value.split('-').map(Number)
@@ -98,6 +103,15 @@ export default function DetalhesPage() {
           })
         }
 
+        // Filtrar por query (case-insensitive)
+        if (query && query.trim()) {
+          const searchTerm = query.trim().toLowerCase()
+          filteredAlerts = filteredAlerts.filter(alert => {
+            const description = (alert.rule?.description || '').toLowerCase()
+            return description.includes(searchTerm)
+          })
+        }
+
         setTotalAlerts(filteredAlerts.length)
 
         // Contar descrições de alertas
@@ -136,6 +150,7 @@ export default function DetalhesPage() {
 
         setChartData(sortedData)
         setAgentChartData(sortedAgentData)
+        setAllAlerts(filteredAlerts)
       } catch (err) {
         console.error('Erro ao carregar dados:', err)
       } finally {
@@ -144,7 +159,96 @@ export default function DetalhesPage() {
     }
 
     fetchData()
-  }, [levelFilter, agentFilter, startDate, endDate])
+  }, [levelFilter, agentFilter, startDate, endDate, query, selectedDescription, selectedAgent])
+
+  useEffect(() => {
+    if (selectedDescription) {
+      // Filtrar alertas pela descrição selecionada
+      const alertsWithDescription = allAlerts.filter(alert => alert.rule?.description === selectedDescription)
+      
+      // Recalcular agentes para os alertas filtrados
+      const agentCount: Record<string, number> = {}
+      alertsWithDescription.forEach(alert => {
+        const agentName = alert.agent?.name || 'Agente desconhecido'
+        agentCount[agentName] = (agentCount[agentName] || 0) + 1
+      })
+
+      const sortedAgentData = Object.entries(agentCount)
+        .map(([agentName, count]) => ({
+          agentName,
+          count,
+        }))
+        .sort((a, b) => b.count - a.count)
+
+      setAgentChartData(sortedAgentData)
+    }
+  }, [selectedDescription, allAlerts])
+
+  useEffect(() => {
+    if (selectedAgent) {
+      // Mostrar apenas o agente selecionado no gráfico
+      const agentData = Object.entries(
+        allAlerts
+          .filter(alert => alert.agent?.name === selectedAgent)
+          .reduce((acc: Record<string, number>, alert) => {
+            const description = alert.rule?.description || 'Sem descrição'
+            acc[description] = (acc[description] || 0) + 1
+            return acc
+          }, {})
+      )
+        .map(([description, count]) => ({
+          description: description.length > 60 ? description.substring(0, 60) + '...' : description,
+          fullDescription: description,
+          count
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 15)
+
+      setChartData(agentData)
+      
+      // Mostrar apenas o agente selecionado no gráfico de agentes
+      setAgentChartData([{
+        agentName: selectedAgent,
+        count: allAlerts.filter(alert => alert.agent?.name === selectedAgent).length
+      }])
+      
+      setTotalAlerts(allAlerts.filter(alert => alert.agent?.name === selectedAgent).length)
+    }
+  }, [selectedAgent, allAlerts])
+
+  useEffect(() => {
+    if (selectedAgent) {
+      // Filtrar alertas pelo agente selecionado
+      const alertsWithAgent = allAlerts.filter(alert => alert.agent?.name === selectedAgent)
+      
+      // Recalcular descrições para os alertas filtrados
+      const descriptionCount: Record<string, number> = {}
+      alertsWithAgent.forEach(alert => {
+        const description = alert.rule?.description || 'Sem descrição'
+        descriptionCount[description] = (descriptionCount[description] || 0) + 1
+      })
+
+      const sortedData = Object.entries(descriptionCount)
+        .map(([description, count]) => ({
+          description: description.length > 60 ? description.substring(0, 60) + '...' : description,
+          fullDescription: description,
+          count
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 15)
+
+      setChartData(sortedData)
+      setTotalAlerts(alertsWithAgent.length)
+    }
+  }, [selectedAgent, allAlerts])
+
+  const handleDescriptionClick = (description: string) => {
+    setSelectedDescription(description)
+  }
+
+  const handleAgentClick = (agentName: string) => {
+    setSelectedAgent(agentName)
+  }
 
   const COLORS = [
     '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6',
@@ -153,9 +257,10 @@ export default function DetalhesPage() {
   ]
 
   return (
-    <div>
-      <Header />
-      <main className="container py-8">
+    <ProtectedRoute>
+      <div>
+        <Header />
+        <main className="container py-8">
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-slate-100 mb-2">Análise Detalhada de Alertas</h2>
           <p className="text-slate-400">
@@ -222,24 +327,40 @@ export default function DetalhesPage() {
                 className="border border-slate-700 bg-slate-900 text-slate-100 rounded px-3 py-2 text-sm flex-1"
               />
             </div>
+
+            <div className="flex items-center gap-2 col-span-2">
+              <label className="text-sm text-slate-300 font-medium min-w-[60px]">Buscar:</label>
+              <input
+                placeholder="Buscar por descrição..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="border border-slate-700 bg-slate-900 text-slate-100 placeholder-slate-400 rounded px-3 py-2 text-sm flex-1"
+              />
+            </div>
           </div>
         </div>
 
         {/* Indicador de filtro ativo */}
-        {(levelFilter || agentFilter || startDate || endDate) && (
+        {(levelFilter || agentFilter || startDate || endDate || query || selectedDescription || selectedAgent) && (
           <div className="mb-4 px-4 py-2 bg-blue-900/30 border border-blue-500 rounded-md flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-blue-200 text-sm">
                 📊 Mostrando alertas
                 {levelFilter && <strong className="ml-1">Nível {levelFilter}</strong>}
-                {(levelFilter && (agentFilter || startDate || endDate)) && <span className="mx-1">•</span>}
+                {(levelFilter && (agentFilter || startDate || endDate || query || selectedDescription || selectedAgent)) && <span className="mx-1">•</span>}
                 {agentFilter && <strong>Agente: {agentFilter}</strong>}
-                {(agentFilter && (startDate || endDate)) && <span className="mx-1">•</span>}
+                {(agentFilter && (startDate || endDate || query || selectedDescription || selectedAgent)) && <span className="mx-1">•</span>}
                 {(startDate || endDate) && (
                   <strong>
                     Período: {formatInputDate(startDate)} até {formatInputDate(endDate)}
                   </strong>
                 )}
+                {((startDate || endDate) && (query || selectedDescription || selectedAgent)) && <span className="mx-1">•</span>}
+                {query && <strong>Busca: "{query}"</strong>}
+                {(query && (selectedDescription || selectedAgent)) && <span className="mx-1">•</span>}
+                {selectedDescription && <strong>Descrição selecionada</strong>}
+                {(selectedDescription && selectedAgent) && <span className="mx-1">•</span>}
+                {selectedAgent && <strong>Agente selecionado: {selectedAgent}</strong>}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -267,6 +388,44 @@ export default function DetalhesPage() {
                   ✕ Período
                 </button>
               )}
+              {query && (
+                <button
+                  onClick={() => setQuery('')}
+                  className="text-blue-300 hover:text-blue-100 text-xs font-medium px-2 py-1 bg-blue-800/50 rounded"
+                >
+                  ✕ Busca
+                </button>
+              )}
+              {selectedDescription && (
+                <button
+                  onClick={() => setSelectedDescription('')}
+                  className="text-blue-300 hover:text-blue-100 text-xs font-medium px-2 py-1 bg-blue-800/50 rounded"
+                >
+                  ✕ Descrição
+                </button>
+              )}
+              {selectedAgent && (
+                <button
+                  onClick={() => setSelectedAgent('')}
+                  className="text-blue-300 hover:text-blue-100 text-xs font-medium px-2 py-1 bg-blue-800/50 rounded"
+                >
+                  ✕ Agente Selecionado
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setLevelFilter('')
+                  setAgentFilter('')
+                  setStartDate('')
+                  setEndDate('')
+                  setQuery('')
+                  setSelectedDescription('')
+                  setSelectedAgent('')
+                }}
+                className="text-blue-300 hover:text-blue-100 text-xs font-medium px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded ml-2"
+              >
+                🔄 Limpar Todos
+              </button>
             </div>
           </div>
         )}
@@ -296,71 +455,13 @@ export default function DetalhesPage() {
           </div>
         </div>
 
-        {/* Gráfico */}
-        <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
-          <h3 className="text-xl font-semibold text-slate-100 mb-6">
-            Top 15 Descrições de Alertas Mais Gerados
-            {(levelFilter || agentFilter || startDate || endDate) && (
-              <span className="text-blue-400 text-base ml-2">
-                ({[levelFilter && `Nível ${levelFilter}`, agentFilter, (startDate || endDate) && 'Período'].filter(Boolean).join(' • ')})
-              </span>
-            )}
-          </h3>
-          
-          {loading ? (
-            <div className="h-96 flex items-center justify-center">
-              <div className="text-slate-400">Carregando dados...</div>
-            </div>
-          ) : chartData.length === 0 ? (
-            <div className="h-96 flex items-center justify-center">
-              <div className="text-slate-400">Nenhum dado disponível</div>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={500}>
-              <BarChart
-                data={chartData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 100 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis 
-                  dataKey="description" 
-                  angle={-45} 
-                  textAnchor="end" 
-                  height={150}
-                  tick={{ fill: '#94a3b8', fontSize: 12 }}
-                />
-                <YAxis tick={{ fill: '#94a3b8' }} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1e293b', 
-                    border: '1px solid #475569',
-                    borderRadius: '6px',
-                    color: '#e2e8f0'
-                  }}
-                  labelStyle={{ color: '#cbd5e1' }}
-                  formatter={(value: number, name: string, props: any) => [
-                    `${value} ocorrências`,
-                    props.payload.fullDescription
-                  ]}
-                />
-                <Legend wrapperStyle={{ color: '#cbd5e1' }} />
-                <Bar dataKey="count" name="Quantidade de Alertas">
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
         {/* Gráfico - Top 15 por Agente */}
         <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 mt-8">
           <h3 className="text-xl font-semibold text-slate-100 mb-6">
-            Top 15 Agentes com Mais Alertas Gerados
-            {(levelFilter || agentFilter || startDate || endDate) && (
+            {selectedAgent ? 'Agente Selecionado' : 'Top 15 Agentes com Mais Alertas Gerados'}
+            {(levelFilter || agentFilter || startDate || endDate || query || selectedDescription) && (
               <span className="text-blue-400 text-base ml-2">
-                ({[levelFilter && `Nível ${levelFilter}`, agentFilter, (startDate || endDate) && 'Período'].filter(Boolean).join(' • ')})
+                ({[levelFilter && `Nível ${levelFilter}`, agentFilter, (startDate || endDate) && 'Período', query && `Busca: "${query}"`, selectedDescription && 'Descrição selecionada'].filter(Boolean).join(' • ')})
               </span>
             )}
           </h3>
@@ -374,17 +475,25 @@ export default function DetalhesPage() {
               <div className="text-slate-400">Nenhum dado disponível</div>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={500}>
+            <ResponsiveContainer width="100%" height={350}>
               <BarChart
                 data={agentChartData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 100 }}
+                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                onClick={(state: any) => {
+                  if (state && state.activeTooltipIndex !== undefined) {
+                    const clickedAgent = agentChartData[state.activeTooltipIndex]?.agentName
+                    if (clickedAgent) {
+                      handleAgentClick(clickedAgent)
+                    }
+                  }
+                }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis
                   dataKey="agentName"
                   angle={-45}
                   textAnchor="end"
-                  height={150}
+                  height={80}
                   tick={{ fill: '#94a3b8', fontSize: 12 }}
                 />
                 <YAxis tick={{ fill: '#94a3b8' }} />
@@ -404,7 +513,11 @@ export default function DetalhesPage() {
                 <Legend wrapperStyle={{ color: '#cbd5e1' }} />
                 <Bar dataKey="count" name="Quantidade por Agente">
                   {agentChartData.map((entry, index) => (
-                    <Cell key={`agent-cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell 
+                      key={`agent-cell-${index}`} 
+                      fill={COLORS[index % COLORS.length]}
+                      style={{ cursor: 'pointer' }}
+                    />
                   ))}
                 </Bar>
               </BarChart>
@@ -415,7 +528,14 @@ export default function DetalhesPage() {
         {/* Tabela com Detalhes */}
         <div className="bg-slate-900 border border-slate-700 rounded-lg mt-8 overflow-hidden">
           <div className="p-4 border-b border-slate-700">
-            <h3 className="text-lg font-semibold text-slate-100">Detalhamento</h3>
+            <h3 className="text-lg font-semibold text-slate-100">
+              Detalhamento
+              {selectedAgent && (
+                <span className="text-blue-400 text-base ml-2">
+                  (Agente: {selectedAgent})
+                </span>
+              )}
+            </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -431,7 +551,11 @@ export default function DetalhesPage() {
                 {chartData.map((item, index) => {
                   const percentage = totalAlerts > 0 ? ((item.count / totalAlerts) * 100).toFixed(2) : 0
                   return (
-                    <tr key={index} className="border-t border-slate-800 hover:bg-slate-800">
+                    <tr 
+                      key={index} 
+                      className="border-t border-slate-800 hover:bg-slate-700 cursor-pointer transition-colors"
+                      onClick={() => handleDescriptionClick(item.fullDescription)}
+                    >
                       <td className="p-3 text-slate-300 font-semibold text-center">{index + 1}</td>
                       <td className="p-3 text-slate-200">{item.fullDescription}</td>
                       <td className="p-3 text-slate-200 text-center font-semibold">{item.count.toLocaleString()}</td>
@@ -449,5 +573,6 @@ export default function DetalhesPage() {
         </div>
       </main>
     </div>
+    </ProtectedRoute>
   )
 }

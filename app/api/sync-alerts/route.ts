@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
 import { execSync } from 'child_process'
+import {
+  saveAlertsToCache,
+  getAlertsFromCache,
+  recordConnectionFailure,
+  getCacheInfo,
+} from '@/lib/offline-cache'
 
 export const runtime = 'nodejs'
 
@@ -8,11 +14,55 @@ export async function POST(request: Request) {
     const body = await request.json()
     const limit = body.limit || 500
 
-    // Buscar alertas do Elasticsearch
-    const alertsData = await fetchAlertsViaSSH(limit)
+    // Tentar buscar alertas do Elasticsearch
+    let alertsData: any = null
+    let fromCache = false
+    let connectionError: string | null = null
 
+    try {
+      alertsData = await fetchAlertsViaSSH(limit)
+
+      if (!alertsData.hits?.hits || alertsData.hits.hits.length === 0) {
+        // Tentar usar cache se não houver alertas
+        const cachedData = getAlertsFromCache()
+        if (cachedData) {
+          console.log('[API /sync-alerts] No new alerts, using cached data')
+          alertsData = cachedData
+          fromCache = true
+        } else {
+          return NextResponse.json({ message: 'No alerts to sync', count: 0 })
+        }
+      } else {
+        // Salvar alertas bem-sucedidos em cache
+        saveAlertsToCache(alertsData)
+      }
+    } catch (sshErr: any) {
+      // SSH falhou - tentar usar cache
+      connectionError = sshErr?.message
+      console.warn('[API /sync-alerts] SSH connection failed, attempting fallback to cache...')
+      recordConnectionFailure()
+
+      const cachedData = getAlertsFromCache()
+      if (cachedData) {
+        console.log('[API /sync-alerts] Using cached alerts due to SSH failure')
+        alertsData = cachedData
+        fromCache = true
+      } else {
+        // Nenhum cache disponível
+        return NextResponse.json(
+          {
+            error: 'SSH connection failed and no cached data available',
+            connectionError: connectionError,
+            cacheInfo: getCacheInfo(),
+          },
+          { status: 503 } // Service Unavailable
+        )
+      }
+    }
+
+    // Se chegou aqui, tem dados (seja do SSH ou do cache)
     if (!alertsData.hits?.hits || alertsData.hits.hits.length === 0) {
-      return NextResponse.json({ message: 'No alerts to sync', count: 0 })
+      return NextResponse.json({ message: 'No alerts available', count: 0 })
     }
 
     // Tentar sincronizar para o banco de dados SQLite
@@ -24,16 +74,20 @@ export async function POST(request: Request) {
         message: 'Alerts synced successfully',
         count: result.count,
         total: alertsData.hits?.total?.value ?? alertsData.hits?.total ?? 0,
+        fromCache,
+        cacheInfo: getCacheInfo(),
       })
     } catch (dbErr: any) {
       // Se SQLite falhar, retornar resposta com aviso
       console.warn('[API /sync-alerts] Database sync failed:', dbErr?.message)
       return NextResponse.json(
         {
-          message: 'Alerts fetched from Elasticsearch but database sync failed',
+          message: 'Alerts fetched but database sync failed',
           warning: dbErr?.message,
           count: alertsData.hits.hits.length,
           total: alertsData.hits?.total?.value ?? alertsData.hits?.total ?? 0,
+          fromCache,
+          cacheInfo: getCacheInfo(),
         },
         { status: 206 } // Partial Content
       )
@@ -44,6 +98,7 @@ export async function POST(request: Request) {
       {
         error: err?.message || String(err),
         errorDetails: String(err).substring(0, 200),
+        cacheInfo: getCacheInfo(),
       },
       { status: 500 }
     )

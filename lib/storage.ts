@@ -12,3 +12,21 @@ export function readStorageJson<T>(key: string, fallback: T): T {
     return fallback
   }
 }
+
+export function writeStorageJson<T>(key: string, value: T): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch (err) {
+    console.error(`[Storage] Failed to write ${key}:`, err)
+  }
+}
+
+export function clearStorageKey(key: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.removeItem(key)
+  } catch (err) {
+    console.error(`[Storage] Failed to clear ${key}:`, err)
+  }
+}

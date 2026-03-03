@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import { execSync } from 'child_process'
+import {
+  getAlertsFromCache,
+  recordConnectionFailure,
+  getCacheInfo,
+} from '@/lib/offline-cache'
 
 export const runtime = 'nodejs'
 
@@ -55,15 +60,59 @@ export async function GET(request: Request) {
       }
     }
 
-    // Buscar do Elasticsearch (padrão)
-    const data = await fetchAlertsViaSSH(request)
-    return NextResponse.json(data)
+    // Tentar buscar do Elasticsearch (padrão)
+    try {
+      const data = await fetchAlertsViaSSH(request)
+      return NextResponse.json(data)
+    } catch (sshErr: any) {
+      // SSH falhou - tentar usar cache
+      console.warn('[API /alerts] SSH connection failed, attempting offline cache...')
+      recordConnectionFailure()
+
+      const cachedData = getAlertsFromCache()
+      if (cachedData) {
+        console.log('[API /alerts] Serving cached alerts due to SSH failure')
+        return NextResponse.json(
+          {
+            ...cachedData,
+            offline: true,
+            offlineMessage: 'Serving cached data due to unavailable SSH connection',
+            cacheInfo: getCacheInfo(),
+          }
+        )
+      }
+
+      // Nenhum cache disponível
+      return NextResponse.json(
+        {
+          error: 'SSH connection failed and no cached data available',
+          connectionError: sshErr?.message,
+          cacheInfo: getCacheInfo(),
+        },
+        { status: 503 } // Service Unavailable
+      )
+    }
   } catch (err: any) {
     console.error('[API /alerts] Error:', err)
+
+    // Tentar usar cache como último recurso
+    const cachedData = getAlertsFromCache()
+    if (cachedData) {
+      return NextResponse.json(
+        {
+          ...cachedData,
+          offline: true,
+          offlineMessage: 'Serving cached data due to error',
+          cacheInfo: getCacheInfo(),
+        }
+      )
+    }
+
     return NextResponse.json(
       {
         error: err?.message || String(err),
         errorDetails: err?.cause?.message || err?.stack?.substring(0, 200) || '',
+        cacheInfo: getCacheInfo(),
       },
       { status: 500 }
     )
