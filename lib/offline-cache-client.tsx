@@ -63,7 +63,7 @@ export function useGetAlerts() {
   const [offline, setOffline] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const fetch = async (limit: number = 50, offset: number = 0) => {
+  const fetchAlertsData = async (limit: number = 50, offset: number = 0) => {
     setLoading(true)
     setError(null)
 
@@ -97,7 +97,7 @@ export function useGetAlerts() {
     }
   }
 
-  return { alerts, loading, offline, error, fetch }
+  return { alerts, loading, offline, error, fetch: fetchAlertsData }
 }
 
 /**

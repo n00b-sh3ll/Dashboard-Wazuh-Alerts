@@ -15,6 +15,14 @@ interface User {
   role: 'admin' | 'operador' | 'user'
 }
 
+interface SSHConfig {
+  ip: string
+  username: string
+  authType: 'password' | 'key'
+  password: string
+  sshKey: string
+}
+
 export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([])
   const [name, setName] = useState('')
@@ -25,6 +33,18 @@ export default function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [isAuthorized, setIsAuthorized] = useState(false)
+  
+  // SSH Config states
+  const [sshConfig, setSSHConfig] = useState<SSHConfig>({
+    ip: '',
+    username: '',
+    authType: 'password',
+    password: '',
+    sshKey: ''
+  })
+  const [showSSHPassword, setShowSSHPassword] = useState(false)
+  const [sshMessage, setSSHMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  
   const router = useRouter()
 
   useEffect(() => {
@@ -44,6 +64,12 @@ export default function AdminPage() {
     setIsAuthorized(true)
     const storedUsers = readStorageJson<User[]>('consoleUsers', [])
     setUsers(storedUsers)
+    
+    // Carregar configuração SSH
+    const storedSSHConfig = readStorageJson<SSHConfig>('sshConfig', null)
+    if (storedSSHConfig) {
+      setSSHConfig(storedSSHConfig)
+    }
   }, [router])
 
   const saveUsers = (updatedUsers: User[]) => {
@@ -148,6 +174,65 @@ export default function AdminPage() {
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  const saveSSHConfig = (updatedConfig: SSHConfig) => {
+    writeStorageJson('sshConfig', updatedConfig)
+    setSSHConfig(updatedConfig)
+  }
+
+  const handleSSHConfigChange = (field: keyof SSHConfig, value: string) => {
+    setSSHConfig(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleSaveSSHConfig = () => {
+    if (!sshConfig.ip.trim() || !sshConfig.username.trim()) {
+      setSSHMessage({ type: 'error', text: 'IP e Usuário são obrigatórios' })
+      setTimeout(() => setSSHMessage(null), 3000)
+      return
+    }
+
+    if (sshConfig.authType === 'password' && !sshConfig.password.trim()) {
+      setSSHMessage({ type: 'error', text: 'Senha é obrigatória para autenticação por senha' })
+      setTimeout(() => setSSHMessage(null), 3000)
+      return
+    }
+
+    if (sshConfig.authType === 'key' && !sshConfig.sshKey.trim()) {
+      setSSHMessage({ type: 'error', text: 'Chave SSH é obrigatória para autenticação por chave' })
+      setTimeout(() => setSSHMessage(null), 3000)
+      return
+    }
+
+    // Validar IP
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/
+    if (!ipRegex.test(sshConfig.ip)) {
+      setSSHMessage({ type: 'error', text: 'IP inválido' })
+      setTimeout(() => setSSHMessage(null), 3000)
+      return
+    }
+
+    saveSSHConfig(sshConfig)
+    setSSHMessage({ type: 'success', text: 'Configuração SSH salva com sucesso' })
+    setTimeout(() => setSSHMessage(null), 3000)
+  }
+
+  const handleClearSSHConfig = () => {
+    if (confirm('Tem certeza que deseja limpar as configurações SSH?')) {
+      setSSHConfig({
+        ip: '',
+        username: '',
+        authType: 'password',
+        password: '',
+        sshKey: ''
+      })
+      writeStorageJson('sshConfig', null)
+      setSSHMessage({ type: 'success', text: 'Configurações SSH removidas' })
+      setTimeout(() => setSSHMessage(null), 3000)
+    }
   }
 
   if (!isAuthorized) {
@@ -384,6 +469,159 @@ export default function AdminPage() {
             <div className="text-sm font-semibold text-green-300">Usuários Comuns</div>
             <div className="text-3xl font-bold text-green-100 mt-2">
               {users.filter(u => u.role === 'user').length}
+            </div>
+          </div>
+        </div>
+
+        {/* Configurações SSH */}
+        <div className="mt-8 bg-slate-900 border border-slate-700 rounded-lg p-6">
+          <div className="mb-6">
+            <h3 className="text-xl font-semibold text-slate-100 mb-2">🔐 Configurações SSH</h3>
+            <p className="text-slate-400 text-sm">Configure as credenciais SSH para coleta de dados do Wazuh</p>
+          </div>
+
+          {/* Mensagem de feedback SSH */}
+          {sshMessage && (
+            <div className={`mb-6 px-4 py-3 rounded-lg border ${
+              sshMessage.type === 'success' 
+                ? 'bg-green-900/30 border-green-500 text-green-200' 
+                : 'bg-red-900/30 border-red-500 text-red-200'
+            }`}>
+              {sshMessage.text}
+            </div>
+          )}
+
+          <div className="space-y-6">
+            {/* Campos básicos */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Endereço IP
+                </label>
+                <input
+                  type="text"
+                  value={sshConfig.ip}
+                  onChange={(e) => handleSSHConfigChange('ip', e.target.value)}
+                  placeholder="Ex: 192.168.1.100"
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Usuário SSH
+                </label>
+                <input
+                  type="text"
+                  value={sshConfig.username}
+                  onChange={(e) => handleSSHConfigChange('username', e.target.value)}
+                  placeholder="Ex: root ou ubuntu"
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Tipo de autenticação */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Tipo de Autenticação
+              </label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value="password"
+                    checked={sshConfig.authType === 'password'}
+                    onChange={(e) => handleSSHConfigChange('authType', e.target.value)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-slate-300">Autenticação por Senha</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value="key"
+                    checked={sshConfig.authType === 'key'}
+                    onChange={(e) => handleSSHConfigChange('authType', e.target.value)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-slate-300">Autenticação por Chave SSH</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Campo de Senha ou Chave SSH */}
+            {sshConfig.authType === 'password' ? (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Senha
+                </label>
+                <div className="relative">
+                  <input
+                    type={showSSHPassword ? "text" : "password"}
+                    value={sshConfig.password}
+                    onChange={(e) => handleSSHConfigChange('password', e.target.value)}
+                    placeholder="Digite a senha SSH"
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSSHPassword(!showSSHPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  >
+                    {showSSHPassword ? '👁️' : '👁️‍🗨️'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Chave SSH (Privada)
+                </label>
+                <textarea
+                  value={sshConfig.sshKey}
+                  onChange={(e) => handleSSHConfigChange('sshKey', e.target.value)}
+                  placeholder="Cole sua chave SSH privada aqui (começando com -----BEGIN...)"
+                  rows={6}
+                  className="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-400 focus:outline-none focus:border-blue-500 font-mono text-xs"
+                />
+              </div>
+            )}
+
+            {/* Status da configuração */}
+            {sshConfig.ip && sshConfig.username && (
+              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                <div className="text-sm text-slate-300">
+                  <div className="mb-2">
+                    <span className="font-semibold text-slate-200">Status da Configuração: </span>
+                    <span className="text-green-300">✅ Configurada</span>
+                  </div>
+                  <div className="space-y-1 text-xs text-slate-400">
+                    <div><span className="text-slate-300">IP:</span> {sshConfig.ip}</div>
+                    <div><span className="text-slate-300">Usuário:</span> {sshConfig.username}</div>
+                    <div><span className="text-slate-300">Autenticação:</span> {sshConfig.authType === 'password' ? 'Senha' : 'Chave SSH'}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Botões de ação */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleSaveSSHConfig}
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+              >
+                💾 Salvar Configuração
+              </button>
+              
+              {sshConfig.ip && sshConfig.username && (
+                <button
+                  onClick={handleClearSSHConfig}
+                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  🗑️ Limpar Configuração
+                </button>
+              )}
             </div>
           </div>
         </div>

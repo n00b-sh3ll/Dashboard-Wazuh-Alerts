@@ -35,10 +35,10 @@ export default function DetalhesPage() {
     async function fetchData() {
       setLoading(true)
       try {
-        // Buscar todos os alertas em lotes para evitar truncamento em 500
+        // Buscar alertas em lotes para evitar truncamento
         const batchSize = 500
-        // Elasticsearch geralmente limita paginação por from/size em 10k (max_result_window)
-        const maxAlerts = 10000
+        // Limitar a 5.000 alertas para melhor performance
+        const maxAlerts = 5000
         let offset = 0
         let alerts: any[] = []
         let totalFromApi: number | null = null
@@ -159,7 +159,7 @@ export default function DetalhesPage() {
     }
 
     fetchData()
-  }, [levelFilter, agentFilter, startDate, endDate, query, selectedDescription, selectedAgent])
+  }, [levelFilter, agentFilter, startDate, endDate, query])
 
   useEffect(() => {
     if (selectedDescription) {
@@ -186,40 +186,9 @@ export default function DetalhesPage() {
 
   useEffect(() => {
     if (selectedAgent) {
-      // Mostrar apenas o agente selecionado no gráfico
-      const agentData = Object.entries(
-        allAlerts
-          .filter(alert => alert.agent?.name === selectedAgent)
-          .reduce((acc: Record<string, number>, alert) => {
-            const description = alert.rule?.description || 'Sem descrição'
-            acc[description] = (acc[description] || 0) + 1
-            return acc
-          }, {})
-      )
-        .map(([description, count]) => ({
-          description: description.length > 60 ? description.substring(0, 60) + '...' : description,
-          fullDescription: description,
-          count
-        }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 15)
-
-      setChartData(agentData)
-      
-      // Mostrar apenas o agente selecionado no gráfico de agentes
-      setAgentChartData([{
-        agentName: selectedAgent,
-        count: allAlerts.filter(alert => alert.agent?.name === selectedAgent).length
-      }])
-      
-      setTotalAlerts(allAlerts.filter(alert => alert.agent?.name === selectedAgent).length)
-    }
-  }, [selectedAgent, allAlerts])
-
-  useEffect(() => {
-    if (selectedAgent) {
       // Filtrar alertas pelo agente selecionado
       const alertsWithAgent = allAlerts.filter(alert => alert.agent?.name === selectedAgent)
+      const agentCount = alertsWithAgent.length
       
       // Recalcular descrições para os alertas filtrados
       const descriptionCount: Record<string, number> = {}
@@ -237,8 +206,13 @@ export default function DetalhesPage() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 15)
 
+      // Atualizar ambos gráficos em uma única execução
       setChartData(sortedData)
-      setTotalAlerts(alertsWithAgent.length)
+      setAgentChartData([{
+        agentName: selectedAgent,
+        count: agentCount
+      }])
+      setTotalAlerts(agentCount)
     }
   }, [selectedAgent, allAlerts])
 

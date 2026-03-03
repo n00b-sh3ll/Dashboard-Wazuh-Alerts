@@ -203,6 +203,7 @@ export default function AlertList({ alerts, loading, error, page, pageSize, onPa
             const description = a.rule?.description ?? a.full_log ?? '—'
             const timestamp = a['@timestamp'] ?? a.timestamp ?? '—'
             const level = a.rule?.level ?? '—'
+            const realAlertId = a._id ?? a.id ?? a.event_id ?? a.wazuh_alert_id ?? '—'
             
             const alertData = storedAnnotations[a._id] || {}
             const status = alertData.status || '—'
@@ -252,6 +253,7 @@ export default function AlertList({ alerts, loading, error, page, pageSize, onPa
                 </td>
                 <td 
                   className="p-3 text-sm font-semibold text-center text-blue-600 w-12 cursor-pointer"
+                  title={`ID: ${realAlertId}`}
                   onClick={() => onAlertClick?.(a)}
                 >
                   {alertId || '—'}

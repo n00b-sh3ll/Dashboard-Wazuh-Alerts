@@ -164,6 +164,7 @@ export default function AlertModal({ alert, onClose, onSave }: AlertModalProps) 
   const agentIp = alert?.agent?.ip ?? '—'
   const level = alert?.rule?.level ?? '—'
   const ruleId = alert?.rule?.id ?? '—'
+  const userName = alert?.user?.name ?? alert?.user ?? alert?.body?.user ?? alert?.win?.eventdata?.user ?? '—'
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
@@ -188,31 +189,35 @@ export default function AlertModal({ alert, onClose, onSave }: AlertModalProps) 
               <p className="text-slate-100 mt-1 text-xs line-clamp-2">{description}</p>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div>
-                <span className="font-semibold text-slate-300 text-sm">Agent:</span>
-                <p className="text-slate-100 text-sm mt-1">{agentName}</p>
+              <div className="bg-slate-700/30 p-3 rounded border border-slate-700">
+                <span className="font-semibold text-slate-400 text-xs block mb-2">Agent</span>
+                <p className="text-slate-100 text-sm break-words">{agentName}</p>
               </div>
-              <div>
-                <span className="font-semibold text-slate-300 text-sm">IP:</span>
-                <p className="text-slate-100 text-sm mt-1">{agentIp}</p>
+              <div className="bg-slate-700/30 p-3 rounded border border-slate-700">
+                <span className="font-semibold text-slate-400 text-xs block mb-2">Usuário</span>
+                <p className="text-slate-100 text-sm break-words">{userName}</p>
               </div>
-              <div>
-                <span className="font-semibold text-slate-300 text-sm">Nível:</span>
-                <p className="text-slate-100 font-mono font-bold mt-1">{level}</p>
+              <div className="bg-slate-700/30 p-3 rounded border border-slate-700">
+                <span className="font-semibold text-slate-400 text-xs block mb-2">IP</span>
+                <p className="text-slate-100 text-sm break-words">{agentIp}</p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <span className="font-semibold text-slate-300 text-sm">Rule ID:</span>
-                <p className="text-slate-100 font-mono text-xs mt-1">{ruleId}</p>
+            <div className="grid grid-cols-4 gap-3">
+              <div className="bg-slate-700/30 p-3 rounded border border-slate-700">
+                <span className="font-semibold text-slate-400 text-xs block mb-2">Nível</span>
+                <p className="text-slate-100 font-mono font-bold text-sm">{level}</p>
               </div>
-              <div>
-                <span className="font-semibold text-slate-300 text-sm">Data/Hora:</span>
-                <p className="text-slate-100 text-xs mt-1">{timestamp === '—' ? timestamp : formatTimestamp(timestamp)}</p>
+              <div className="bg-slate-700/30 p-3 rounded border border-slate-700">
+                <span className="font-semibold text-slate-400 text-xs block mb-2">Rule ID</span>
+                <p className="text-slate-100 font-mono text-xs break-words">{ruleId}</p>
               </div>
-              <div>
-                <span className="font-semibold text-slate-300 text-sm">Index:</span>
-                <p className="text-slate-100 font-mono text-xs mt-1 break-all">{alert?.['_index'] || '—'}</p>
+              <div className="bg-slate-700/30 p-3 rounded border border-slate-700">
+                <span className="font-semibold text-slate-400 text-xs block mb-2">Data/Hora</span>
+                <p className="text-slate-100 text-xs">{timestamp === '—' ? timestamp : formatTimestamp(timestamp)}</p>
+              </div>
+              <div className="bg-slate-700/30 p-3 rounded border border-slate-700">
+                <span className="font-semibold text-slate-400 text-xs block mb-2">Index</span>
+                <p className="text-slate-100 font-mono text-xs break-words">{alert?.['_index'] || '—'}</p>
               </div>
             </div>
           </div>
