@@ -34,7 +34,7 @@ export default function Header() {
             <a href="/detalhes" className="text-sm text-slate-300 hover:text-white transition">Detalhes</a>
             <a href="/report" className="text-sm text-slate-300 hover:text-white transition">📊 Report</a>
             {canAccessAdmin(currentUser) && (
-              <a href="/admin" className="text-sm text-slate-300 hover:text-white transition">👤 Admin</a>
+              <a href="/admin" className="text-sm text-slate-300 hover:text-white transition">⚙️ Configurações</a>
             )}
             {currentUser && (
               <div className="flex items-center gap-3 pl-3 ml-3 border-l border-slate-700">

@@ -492,9 +492,9 @@ export default function AdminPage() {
       <Header />
       <main className="container py-8">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-slate-100 mb-2">Painel Administrativo</h2>
+          <h2 className="text-2xl font-bold text-slate-100 mb-2">⚙️ Configurações</h2>
           <p className="text-slate-400">
-            Gerencie os usuários que podem acessar o console
+            Gerencie os usuários e configurações do sistema
           </p>
         </div>
 
