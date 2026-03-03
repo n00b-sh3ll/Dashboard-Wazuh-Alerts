@@ -13,7 +13,14 @@ export interface SSHConfig {
   sshKey: string
 }
 
+export interface SSHConnectionStatus {
+  connected: boolean
+  lastConnectionTime?: string
+  lastErrorMessage?: string
+}
+
 const SSH_CONFIG_KEY = 'sshConfig'
+const SSH_CONNECTION_STATUS_KEY = 'sshConnectionStatus'
 
 /**
  * Get the current SSH configuration
@@ -97,5 +104,53 @@ export function getSSHConnectionInfo(): { ip?: string; username?: string; authTy
     ip: config.ip,
     username: config.username,
     authType: config.authType === 'password' ? 'Senha' : 'Chave SSH'
+  }
+}
+
+/**
+ * Get SSH connection status
+ * @returns Current connection status
+ */
+export function getSSHConnectionStatus(): SSHConnectionStatus {
+  return readStorageJson<SSHConnectionStatus>(SSH_CONNECTION_STATUS_KEY, { connected: false })
+}
+
+/**
+ * Save SSH connection status
+ * @param status Connection status to save
+ */
+export function saveSSHConnectionStatus(status: SSHConnectionStatus): void {
+  writeStorageJson(SSH_CONNECTION_STATUS_KEY, status)
+}
+
+/**
+ * Check if SSH is currently connected
+ * @returns true if last connection was successful
+ */
+export function isSSHConnected(): boolean {
+  const status = getSSHConnectionStatus()
+  return status.connected === true
+}
+
+/**
+ * Get formatted last connection time
+ * @returns Formatted timestamp or 'Nunca'
+ */
+export function getLastSSHConnectionTime(): string {
+  const status = getSSHConnectionStatus()
+  if (!status.lastConnectionTime) return 'Nunca'
+  
+  try {
+    const date = new Date(status.lastConnectionTime)
+    return date.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  } catch {
+    return 'Inválido'
   }
 }

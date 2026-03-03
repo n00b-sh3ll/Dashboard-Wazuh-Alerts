@@ -23,6 +23,12 @@ interface SSHConfig {
   sshKey: string
 }
 
+interface SSHConnectionStatus {
+  connected: boolean
+  lastConnectionTime?: string
+  lastErrorMessage?: string
+}
+
 export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([])
   const [name, setName] = useState('')
@@ -44,6 +50,8 @@ export default function AdminPage() {
   })
   const [showSSHPassword, setShowSSHPassword] = useState(false)
   const [sshMessage, setSSHMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [sshConnectionStatus, setSSHConnectionStatus] = useState<SSHConnectionStatus>({ connected: false })
+  const [isTestingConnection, setIsTestingConnection] = useState(false)
   
   const router = useRouter()
 
@@ -69,6 +77,12 @@ export default function AdminPage() {
     const storedSSHConfig = readStorageJson<SSHConfig>('sshConfig', null)
     if (storedSSHConfig) {
       setSSHConfig(storedSSHConfig)
+    }
+    
+    // Carregar status de conexão SSH
+    const storedConnectionStatus = readStorageJson<SSHConnectionStatus>('sshConnectionStatus', { connected: false })
+    if (storedConnectionStatus) {
+      setSSHConnectionStatus(storedConnectionStatus)
     }
   }, [router])
 
@@ -230,8 +244,88 @@ export default function AdminPage() {
         sshKey: ''
       })
       writeStorageJson('sshConfig', null)
+      setSSHConnectionStatus({ connected: false })
+      writeStorageJson('sshConnectionStatus', { connected: false })
       setSSHMessage({ type: 'success', text: 'Configurações SSH removidas' })
       setTimeout(() => setSSHMessage(null), 3000)
+    }
+  }
+
+  const handleTestSSHConnection = async () => {
+    if (!sshConfig.ip.trim() || !sshConfig.username.trim()) {
+      setSSHMessage({ type: 'error', text: 'IP e Usuário são obrigatórios' })
+      setTimeout(() => setSSHMessage(null), 3000)
+      return
+    }
+
+    if (sshConfig.authType === 'password' && !sshConfig.password.trim()) {
+      setSSHMessage({ type: 'error', text: 'Senha é obrigatória para testar conexão' })
+      setTimeout(() => setSSHMessage(null), 3000)
+      return
+    }
+
+    if (sshConfig.authType === 'key' && !sshConfig.sshKey.trim()) {
+      setSSHMessage({ type: 'error', text: 'Chave SSH é obrigatória para testar conexão' })
+      setTimeout(() => setSSHMessage(null), 3000)
+      return
+    }
+
+    setIsTestingConnection(true)
+    try {
+      const response = await fetch('/api/test-ssh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sshConfig)
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        const connectionStatus: SSHConnectionStatus = {
+          connected: true,
+          lastConnectionTime: new Date().toISOString()
+        }
+        writeStorageJson('sshConnectionStatus', connectionStatus)
+        setSSHConnectionStatus(connectionStatus)
+        setSSHMessage({ type: 'success', text: '✅ Conexão SSH estabelecida com sucesso!' })
+      } else {
+        const connectionStatus: SSHConnectionStatus = {
+          connected: false,
+          lastErrorMessage: data.error || 'Falha ao conectar'
+        }
+        writeStorageJson('sshConnectionStatus', connectionStatus)
+        setSSHConnectionStatus(connectionStatus)
+        setSSHMessage({ type: 'error', text: `❌ Erro na conexão: ${data.error || 'Falha desconhecida'}` })
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+      const connectionStatus: SSHConnectionStatus = {
+        connected: false,
+        lastErrorMessage: errorMessage
+      }
+      writeStorageJson('sshConnectionStatus', connectionStatus)
+      setSSHConnectionStatus(connectionStatus)
+      setSSHMessage({ type: 'error', text: `❌ Erro ao testar conexão: ${errorMessage}` })
+    } finally {
+      setIsTestingConnection(false)
+      setTimeout(() => setSSHMessage(null), 5000)
+    }
+  }
+
+  const formatConnectionTime = (isoDate?: string) => {
+    if (!isoDate) return 'Nunca'
+    try {
+      const date = new Date(isoDate)
+      return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    } catch {
+      return 'Inválido'
     }
   }
 
@@ -588,25 +682,51 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Status da configuração */}
+            {/* Status da configuração e conexão */}
             {sshConfig.ip && sshConfig.username && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                <div className="text-sm text-slate-300">
-                  <div className="mb-2">
-                    <span className="font-semibold text-slate-200">Status da Configuração: </span>
-                    <span className="text-green-300">✅ Configurada</span>
+              <div className="space-y-4">
+                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                  <div className="text-sm text-slate-300">
+                    <div className="mb-2">
+                      <span className="font-semibold text-slate-200">Status da Configuração: </span>
+                      <span className="text-green-300">✅ Configurada</span>
+                    </div>
+                    <div className="space-y-1 text-xs text-slate-400">
+                      <div><span className="text-slate-300">IP:</span> {sshConfig.ip}</div>
+                      <div><span className="text-slate-300">Usuário:</span> {sshConfig.username}</div>
+                      <div><span className="text-slate-300">Autenticação:</span> {sshConfig.authType === 'password' ? 'Senha' : 'Chave SSH'}</div>
+                    </div>
                   </div>
-                  <div className="space-y-1 text-xs text-slate-400">
-                    <div><span className="text-slate-300">IP:</span> {sshConfig.ip}</div>
-                    <div><span className="text-slate-300">Usuário:</span> {sshConfig.username}</div>
-                    <div><span className="text-slate-300">Autenticação:</span> {sshConfig.authType === 'password' ? 'Senha' : 'Chave SSH'}</div>
+                </div>
+
+                {/* Status de Conexão */}
+                <div className={`border rounded-lg p-4 ${
+                  sshConnectionStatus.connected
+                    ? 'bg-green-900/20 border-green-500/30'
+                    : 'bg-yellow-900/20 border-yellow-500/30'
+                }`}>
+                  <div className="text-sm">
+                    <div className="mb-2">
+                      <span className="font-semibold text-slate-200">Status da Conexão: </span>
+                      {sshConnectionStatus.connected ? (
+                        <span className="text-green-300 font-semibold">🟢 Conectado</span>
+                      ) : (
+                        <span className="text-yellow-300 font-semibold">🟡 Não Testado</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      <div><span className="text-slate-300">Última Conexão:</span> {formatConnectionTime(sshConnectionStatus.lastConnectionTime)}</div>
+                      {sshConnectionStatus.lastErrorMessage && (
+                        <div className="mt-1 text-red-300"><span className="text-slate-300">Último Erro:</span> {sshConnectionStatus.lastErrorMessage}</div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
             {/* Botões de ação */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               <button
                 onClick={handleSaveSSHConfig}
                 className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
@@ -615,12 +735,29 @@ export default function AdminPage() {
               </button>
               
               {sshConfig.ip && sshConfig.username && (
-                <button
-                  onClick={handleClearSSHConfig}
-                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  🗑️ Limpar Configuração
-                </button>
+                <>
+                  <button
+                    onClick={handleTestSSHConnection}
+                    disabled={isTestingConnection}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                  >
+                    {isTestingConnection ? (
+                      <>
+                        <span className="inline-block animate-spin">⏳</span>
+                        Testando...
+                      </>
+                    ) : (
+                      '🔗 Testar Conexão'
+                    )}
+                  </button>
+                  
+                  <button
+                    onClick={handleClearSSHConfig}
+                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    🗑️ Limpar Configuração
+                  </button>
+                </>
               )}
             </div>
           </div>
